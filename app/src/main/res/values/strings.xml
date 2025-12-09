@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">echoboard</string>
-    <string name="hello_text">Hello, Android!</string>
+    <string name="hello_text">Hello from echoboard!</string>
 </resources>

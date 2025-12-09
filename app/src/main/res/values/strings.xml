@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Echoboard</string>
+    <string name="hello_world_button_label">Insert \"Hello World\"</string>
+    <string name="hello_world_text">Hello World</string>
+    <string name="hello_world_keyboard_subtype">Echoboard Hello World</string>
+    <string name="sample_title">Echoboard sample input</string>
+    <string name="sample_description">Switch to the Echoboard keyboard from the system input picker, then use the button to insert text.</string>
+    <string name="sample_field_label">Input field</string>
+</resources>

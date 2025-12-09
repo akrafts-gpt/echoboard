@@ -26,6 +26,9 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        val geminiApiKey: String = (project.findProperty("GEMINI_API_KEY") as String?) ?: ""
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     buildTypes {
@@ -99,6 +102,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.google.generativeai)
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.viewmodel.ktx)

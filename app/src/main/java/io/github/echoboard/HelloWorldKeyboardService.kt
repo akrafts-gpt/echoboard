@@ -14,12 +14,28 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.google.ai.client.generativeai.GenerativeModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class HelloWorldKeyboardService : InputMethodService() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var bufferedText: String = ""
     private var bufferedTextView: TextView? = null
     private var insertButton: ImageButton? = null
+    private var composeJob: Job? = null
+    private val userPromptLog = StringBuilder()
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val generativeModel: GenerativeModel by lazy {
+        GenerativeModel(
+            modelName = "gemini-1.5-flash",
+            apiKey = BuildConfig.GEMINI_API_KEY
+        )
+    }
 
     private val recognitionIntent: Intent by lazy {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -41,14 +57,14 @@ class HelloWorldKeyboardService : InputMethodService() {
             val results = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val partialText = results?.firstOrNull()
             if (!partialText.isNullOrBlank()) {
-                updateBufferedText(partialText, enableInsert = false)
+                updatePromptFromSpeech(partialText, isFinalResult = false)
             }
         }
 
         override fun onResults(results: Bundle?) {
             val recognizedText = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
             if (!recognizedText.isNullOrBlank()) {
-                updateBufferedText(recognizedText)
+                updatePromptFromSpeech(recognizedText, isFinalResult = true)
             } else {
                 updateBufferedText(getString(R.string.no_speech_result_message), enableInsert = false)
             }
@@ -71,6 +87,7 @@ class HelloWorldKeyboardService : InputMethodService() {
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         speechRecognizer?.destroy()
         speechRecognizer = null
         super.onDestroy()
@@ -133,7 +150,71 @@ class HelloWorldKeyboardService : InputMethodService() {
     private fun commitBufferedText() {
         if (bufferedText.isBlank()) return
         currentInputConnection?.commitText(bufferedText, 1)
+        userPromptLog.clear()
         updateBufferedText("")
+    }
+
+    private fun updatePromptFromSpeech(speechText: String, isFinalResult: Boolean) {
+        if (speechText.isBlank()) return
+
+        val normalized = speechText.trim()
+        val promptInput = if (isFinalResult) {
+            if (userPromptLog.isNotEmpty()) {
+                userPromptLog.append(' ')
+            }
+            userPromptLog.append(normalized)
+            userPromptLog.toString()
+        } else {
+            buildString {
+                append(userPromptLog)
+                if (userPromptLog.isNotEmpty()) append(' ')
+                append(normalized)
+            }
+        }
+
+        requestBoundedMessage(promptInput)
+    }
+
+    private fun requestBoundedMessage(userNotes: String) {
+        if (BuildConfig.GEMINI_API_KEY.isBlank()) {
+            updateBufferedText(getString(R.string.ai_missing_key_message), enableInsert = false)
+            return
+        }
+
+        composeJob?.cancel()
+        composeJob = serviceScope.launch {
+            updateBufferedText(getString(R.string.ai_generating_status), enableInsert = false)
+
+            val prompt = buildString {
+                append("Compose a coherent message that is at most 100 characters long. ")
+                append("Rewrite or summarize the user's running notes into that target length without adding markup.\n\n")
+                append("User notes:\n")
+                append(userNotes)
+            }
+
+            val generated = withContext(Dispatchers.IO) {
+                runCatching { generativeModel.generateContent(prompt).text }.getOrNull()
+            }
+
+            val sanitized = generated?.let { sanitizeGeneratedText(it) }
+
+            if (sanitized.isNullOrBlank()) {
+                updateBufferedText(getString(R.string.ai_error_message), enableInsert = false)
+            } else {
+                updateBufferedText(sanitized)
+            }
+        }
+    }
+
+    private fun sanitizeGeneratedText(text: String): String {
+        if (text.isBlank()) return ""
+
+        val condensed = text
+            .replace("\n", " ")
+            .replace("\s+".toRegex(), " ")
+            .trim()
+
+        return condensed.take(100)
     }
 
     private fun createSpeechRecognizerIfAvailable(): Boolean {

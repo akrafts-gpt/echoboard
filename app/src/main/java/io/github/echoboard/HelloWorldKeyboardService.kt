@@ -2,10 +2,8 @@ package io.github.echoboard
 
 import android.inputmethodservice.InputMethodService
 import android.view.View
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -16,28 +14,13 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.ViewTreeLifecycleOwner
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
 
 class HelloWorldKeyboardService : InputMethodService() {
-    private val lifecycleOwner = ServiceLifecycleOwner()
-
-    override fun onCreate() {
-        super.onCreate()
-        lifecycleOwner.handleOnCreate()
-    }
-
-    override fun onDestroy() {
-        lifecycleOwner.handleOnDestroy()
-        super.onDestroy()
-    }
-
     override fun onCreateInputView(): View {
         return ComposeView(this).apply {
-            ViewTreeLifecycleOwner.set(this, lifecycleOwner)
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 MaterialTheme {
                     Surface(
@@ -60,22 +43,6 @@ class HelloWorldKeyboardService : InputMethodService() {
                     }
                 }
             }
-        }
-    }
-
-    private class ServiceLifecycleOwner : LifecycleOwner {
-        private val registry = LifecycleRegistry(this)
-
-        override fun getLifecycle(): Lifecycle = registry
-
-        fun handleOnCreate() {
-            registry.currentState = Lifecycle.State.CREATED
-            registry.currentState = Lifecycle.State.STARTED
-            registry.currentState = Lifecycle.State.RESUMED
-        }
-
-        fun handleOnDestroy() {
-            registry.currentState = Lifecycle.State.DESTROYED
         }
     }
 }

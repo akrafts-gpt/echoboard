@@ -2,11 +2,9 @@ package io.github.echoboard
 
 import android.inputmethodservice.InputMethodService
 import android.view.View
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -43,7 +41,7 @@ class HelloWorldKeyboardService : InputMethodService() {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .windowInsetsPadding(WindowInsets.systemBars)
+                            .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
                         Button(

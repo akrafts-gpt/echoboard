@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -275,7 +276,7 @@ class HelloWorldKeyboardService : InputMethodService() {
 
         val condensed = text
             .replace("\n", " ")
-            .replace("\s+".toRegex(), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
 
         return condensed.take(100)

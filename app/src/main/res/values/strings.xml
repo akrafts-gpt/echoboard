@@ -21,4 +21,6 @@
     <string name="no_speech_result_message">No speech recognized</string>
     <string name="speech_error_message">There was a problem recognizing speech</string>
     <string name="mic_permission_required_message">Grant microphone permission to start voice input</string>
+    <string name="ai_generating_status">Composing a 100-character message…</string>
+    <string name="ai_error_message">Couldn&apos;t compose a message right now</string>
 </resources>

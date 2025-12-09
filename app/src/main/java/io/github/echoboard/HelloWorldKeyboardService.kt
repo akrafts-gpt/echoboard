@@ -15,12 +15,6 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import java.io.BufferedReader
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URL
-import org.json.JSONArray
-import org.json.JSONObject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +22,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONArray
+import org.json.JSONObject
 
 class HelloWorldKeyboardService : InputMethodService() {
     private var speechRecognizer: SpeechRecognizer? = null
@@ -197,12 +197,6 @@ class HelloWorldKeyboardService : InputMethodService() {
     }
 
     private fun requestBoundedMessage(userNotes: String) {
-        if (BuildConfig.GEMINI_API_KEY.isBlank()) {
-            Log.e(TAG, "Gemini API key missing")
-            updateBufferedText(getString(R.string.ai_missing_key_message), enableInsert = false)
-            return
-        }
-
         composeJob?.cancel()
         composeJob = serviceScope.launch {
             Log.d(TAG, "Requesting bounded message for notes length=${userNotes.length}")
@@ -215,7 +209,24 @@ class HelloWorldKeyboardService : InputMethodService() {
                 append(userNotes)
             }
 
-            when (val result = requestGeminiText(prompt)) {
+            val result = when {
+                shouldUseOnDeviceModel() -> {
+                    Log.d(TAG, "Using on-device composer (no API key or preference)")
+                    composeOnDevice(userNotes)
+                }
+
+                else -> {
+                    val remoteResult = requestGeminiText(prompt)
+                    if (remoteResult is GeminiComposeResult.Failure && shouldFallbackToOnDevice(remoteResult)) {
+                        Log.w(TAG, "Remote compose failed (${remoteResult.reason}); falling back to on-device composer")
+                        composeOnDevice(userNotes)
+                    } else {
+                        remoteResult
+                    }
+                }
+            }
+
+            when (result) {
                 is GeminiComposeResult.Success -> {
                     val sanitized = sanitizeGeneratedText(result.text)
                     if (sanitized.isBlank()) {
@@ -239,12 +250,51 @@ class HelloWorldKeyboardService : InputMethodService() {
         }
     }
 
+    private fun shouldUseOnDeviceModel(): Boolean {
+        return BuildConfig.GEMINI_API_KEY.isBlank()
+    }
+
+    private fun shouldFallbackToOnDevice(result: GeminiComposeResult.Failure): Boolean {
+        val reason = result.reason.lowercase()
+        return "quota" in reason || "billing" in reason || "api key" in reason
+    }
+
+    private fun composeOnDevice(userNotes: String): GeminiComposeResult {
+        val condensed = userNotes
+            .replace("\n", " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+        if (condensed.isBlank()) {
+            return GeminiComposeResult.Failure("No speech content to summarize")
+        }
+
+        val targetLength = 100
+        val bounded = if (condensed.length <= targetLength) {
+            val suffix = " (draft)"
+            val paddingNeeded = (targetLength - condensed.length - suffix.length).coerceAtLeast(0)
+            buildString {
+                append(condensed)
+                if (paddingNeeded > 0) {
+                    append(' ')
+                    append("·".repeat(paddingNeeded.coerceAtMost(10)))
+                }
+                append(suffix)
+            }.take(targetLength)
+        } else {
+            condensed.take(targetLength)
+        }
+
+        Log.d(TAG, "On-device composed text: '$bounded'")
+        return GeminiComposeResult.Success(bounded)
+    }
+
     private suspend fun requestGeminiText(prompt: String): GeminiComposeResult {
         return withContext(Dispatchers.IO) {
             runCatching {
                 Log.d(TAG, "Sending prompt to Gemini (${prompt.length} chars)")
                 val endpoint =
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}"
+                    "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-live:generateContent?key=${BuildConfig.GEMINI_API_KEY}"
 
                 val payload = JSONObject().apply {
                     put(
@@ -252,6 +302,7 @@ class HelloWorldKeyboardService : InputMethodService() {
                         JSONArray().apply {
                             put(
                                 JSONObject().apply {
+                                    put("role", "user")
                                     put(
                                         "parts",
                                         JSONArray().apply {

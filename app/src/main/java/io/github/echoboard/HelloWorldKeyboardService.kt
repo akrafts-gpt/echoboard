@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
@@ -37,6 +38,10 @@ class HelloWorldKeyboardService : InputMethodService() {
     private val userPromptLog = StringBuilder()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    companion object {
+        private const val TAG = "HelloWorldKeyboard"
+    }
+
     private val recognitionIntent: Intent by lazy {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -46,6 +51,7 @@ class HelloWorldKeyboardService : InputMethodService() {
 
     private val recognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
+            Log.d(TAG, "Speech ready for input")
             updateBufferedText(getString(R.string.listening_status))
         }
 
@@ -54,6 +60,7 @@ class HelloWorldKeyboardService : InputMethodService() {
         override fun onBufferReceived(buffer: ByteArray?) = Unit
 
         override fun onPartialResults(partialResults: Bundle?) {
+            Log.d(TAG, "Partial speech results: $partialResults")
             val results = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val partialText = results?.firstOrNull()
             if (!partialText.isNullOrBlank()) {
@@ -62,6 +69,7 @@ class HelloWorldKeyboardService : InputMethodService() {
         }
 
         override fun onResults(results: Bundle?) {
+            Log.d(TAG, "Final speech results: $results")
             val recognizedText = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
             if (!recognizedText.isNullOrBlank()) {
                 updatePromptFromSpeech(recognizedText, isFinalResult = true)
@@ -71,7 +79,9 @@ class HelloWorldKeyboardService : InputMethodService() {
         }
 
         override fun onError(error: Int) {
-            updateBufferedText(getString(R.string.speech_error_message), enableInsert = false)
+            val description = describeSpeechError(error)
+            Log.e(TAG, "Speech error ($error): $description")
+            updateBufferedText("${getString(R.string.speech_error_message)} ($description)", enableInsert = false)
         }
 
         override fun onBeginningOfSpeech() = Unit
@@ -83,6 +93,7 @@ class HelloWorldKeyboardService : InputMethodService() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "Service created")
         createSpeechRecognizerIfAvailable()
     }
 
@@ -90,6 +101,7 @@ class HelloWorldKeyboardService : InputMethodService() {
         serviceScope.cancel()
         speechRecognizer?.destroy()
         speechRecognizer = null
+        Log.d(TAG, "Service destroyed")
         super.onDestroy()
     }
 
@@ -102,6 +114,8 @@ class HelloWorldKeyboardService : InputMethodService() {
         bufferedTextView = bufferTextView
         insertButton = insertButtonView
         updateBufferedText(bufferedText, enableInsert = bufferedText.isNotBlank())
+
+        Log.d(TAG, "Input view created; buffer='${bufferedText}'")
 
         val initialLeftPadding = keyboardView.paddingLeft
         val initialTopPadding = keyboardView.paddingTop
@@ -133,22 +147,26 @@ class HelloWorldKeyboardService : InputMethodService() {
 
     private fun startVoiceRecognition() {
         if (!hasRecordAudioPermission()) {
+            Log.w(TAG, "Microphone permission missing")
             requestMicrophonePermission()
             updateBufferedText(getString(R.string.mic_permission_required_message), enableInsert = false)
             return
         }
 
         if (speechRecognizer == null && !createSpeechRecognizerIfAvailable()) {
+            Log.e(TAG, "Speech recognizer unavailable")
             updateBufferedText(getString(R.string.speech_unavailable_message), enableInsert = false)
             return
         }
 
+        Log.d(TAG, "Starting voice recognition")
         updateBufferedText(getString(R.string.listening_status), enableInsert = false)
         speechRecognizer?.startListening(recognitionIntent)
     }
 
     private fun commitBufferedText() {
         if (bufferedText.isBlank()) return
+        Log.d(TAG, "Committing buffered text: $bufferedText")
         currentInputConnection?.commitText(bufferedText, 1)
         userPromptLog.clear()
         updateBufferedText("")
@@ -156,6 +174,8 @@ class HelloWorldKeyboardService : InputMethodService() {
 
     private fun updatePromptFromSpeech(speechText: String, isFinalResult: Boolean) {
         if (speechText.isBlank()) return
+
+        Log.d(TAG, "Updating prompt from speech; isFinal=$isFinalResult text='$speechText'")
 
         val normalized = speechText.trim()
         val promptInput = if (isFinalResult) {
@@ -172,17 +192,20 @@ class HelloWorldKeyboardService : InputMethodService() {
             }
         }
 
+        Log.d(TAG, "Prompt input now: '$promptInput'")
         requestBoundedMessage(promptInput)
     }
 
     private fun requestBoundedMessage(userNotes: String) {
         if (BuildConfig.GEMINI_API_KEY.isBlank()) {
+            Log.e(TAG, "Gemini API key missing")
             updateBufferedText(getString(R.string.ai_missing_key_message), enableInsert = false)
             return
         }
 
         composeJob?.cancel()
         composeJob = serviceScope.launch {
+            Log.d(TAG, "Requesting bounded message for notes length=${userNotes.length}")
             updateBufferedText(getString(R.string.ai_generating_status), enableInsert = false)
 
             val prompt = buildString {
@@ -196,8 +219,10 @@ class HelloWorldKeyboardService : InputMethodService() {
             val sanitized = generated?.let { sanitizeGeneratedText(it) }
 
             if (sanitized.isNullOrBlank()) {
+                Log.e(TAG, "Sanitized AI text is blank; raw='$generated'")
                 updateBufferedText(getString(R.string.ai_error_message), enableInsert = false)
             } else {
+                Log.d(TAG, "AI composed text: '$sanitized'")
                 updateBufferedText(sanitized)
             }
         }
@@ -206,6 +231,7 @@ class HelloWorldKeyboardService : InputMethodService() {
     private suspend fun requestGeminiText(prompt: String): String? {
         return withContext(Dispatchers.IO) {
             runCatching {
+                Log.d(TAG, "Sending prompt to Gemini (${prompt.length} chars)")
                 val endpoint =
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}"
 
@@ -255,6 +281,7 @@ class HelloWorldKeyboardService : InputMethodService() {
                 val responseText = if (connection.responseCode in 200..299) {
                     connection.inputStream
                 } else {
+                    Log.w(TAG, "Gemini request failed with code ${connection.responseCode}")
                     connection.errorStream ?: return@withContext null
                 }.bufferedReader(Charsets.UTF_8).use(BufferedReader::readText)
 
@@ -266,6 +293,7 @@ class HelloWorldKeyboardService : InputMethodService() {
                 val content = firstCandidate.optJSONObject("content") ?: return@withContext null
                 val parts = content.optJSONArray("parts") ?: return@withContext null
                 val firstPart = parts.optJSONObject(0) ?: return@withContext null
+                Log.d(TAG, "Gemini response parsed")
                 firstPart.optString("text", null)
             }.getOrNull()
         }
@@ -296,16 +324,19 @@ class HelloWorldKeyboardService : InputMethodService() {
     }
 
     private fun hasRecordAudioPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
+        val granted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
+        Log.d(TAG, "Record audio permission granted=$granted")
+        return granted
     }
 
     private fun requestMicrophonePermission() {
         val intent = Intent(this, PermissionRequestActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+        Log.d(TAG, "Requesting microphone permission via activity")
         startActivity(intent)
     }
 
@@ -317,5 +348,21 @@ class HelloWorldKeyboardService : InputMethodService() {
             text
         }
         insertButton?.isEnabled = enableInsert && bufferedText.isNotBlank()
+        Log.d(TAG, "Buffered text updated; enabled=$enableInsert text='$bufferedText'")
+    }
+
+    private fun describeSpeechError(error: Int): String {
+        return when (error) {
+            SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
+            SpeechRecognizer.ERROR_CLIENT -> "Client side error"
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Insufficient permissions"
+            SpeechRecognizer.ERROR_NETWORK -> "Network error"
+            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
+            SpeechRecognizer.ERROR_NO_MATCH -> "No recognition match"
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy"
+            SpeechRecognizer.ERROR_SERVER -> "Server error"
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Speech timeout"
+            else -> "Unknown error"
+        }
     }
 }

@@ -3,11 +3,23 @@
     package="io.github.echoboard">
 
     <application
-        android:label="Echoboard"
+        android:label="@string/app_name"
         android:icon="@android:drawable/sym_def_app_icon"
         android:allowBackup="true"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <service
+            android:name=".HelloWorldKeyboardService"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/hello_world_input_method" />
+        </service>
 
         <activity
             android:name=".MainActivity"

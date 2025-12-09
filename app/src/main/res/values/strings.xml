@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Echoboard</string>
+    <string name="hello_world_button_label">Insert \"Hello World\"</string>
+    <string name="hello_world_text">Hello World</string>
+    <string name="hello_world_keyboard_subtype">Echoboard Hello World</string>
+    <string name="sample_title">Echoboard sample input</string>
+    <string name="sample_description">Enable the Echoboard keyboard in system settings, then select it from the input picker.</string>
+    <string name="sample_enable_button">Open keyboard settings</string>
+    <string name="sample_usage_hint">After enabling, tap the keyboard icon in the navigation bar or notification shade to switch to Echoboard.</string>
+    <string name="sample_field_label">Input field</string>
+</resources>

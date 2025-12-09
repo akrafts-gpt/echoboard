@@ -1,6 +1,8 @@
 package io.github.echoboard
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.inputmethodservice.InputMethodService
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -9,6 +11,7 @@ import android.speech.SpeechRecognizer
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
@@ -112,6 +115,12 @@ class HelloWorldKeyboardService : InputMethodService() {
     }
 
     private fun startVoiceRecognition() {
+        if (!hasRecordAudioPermission()) {
+            requestMicrophonePermission()
+            updateBufferedText(getString(R.string.mic_permission_required_message), enableInsert = false)
+            return
+        }
+
         if (speechRecognizer == null && !createSpeechRecognizerIfAvailable()) {
             updateBufferedText(getString(R.string.speech_unavailable_message), enableInsert = false)
             return
@@ -138,6 +147,20 @@ class HelloWorldKeyboardService : InputMethodService() {
             }
         }
         return true
+    }
+
+    private fun hasRecordAudioPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestMicrophonePermission() {
+        val intent = Intent(this, PermissionRequestActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
     }
 
     private fun updateBufferedText(text: String, enableInsert: Boolean = true) {

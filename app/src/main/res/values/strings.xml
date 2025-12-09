@@ -20,4 +20,5 @@
     <string name="speech_unavailable_message">Speech recognition is unavailable</string>
     <string name="no_speech_result_message">No speech recognized</string>
     <string name="speech_error_message">There was a problem recognizing speech</string>
+    <string name="mic_permission_required_message">Grant microphone permission to start voice input</string>
 </resources>

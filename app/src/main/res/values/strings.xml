@@ -23,5 +23,4 @@
     <string name="mic_permission_required_message">Grant microphone permission to start voice input</string>
     <string name="ai_generating_status">Composing a 100-character message…</string>
     <string name="ai_error_message">Couldn&apos;t compose a message right now</string>
-    <string name="ai_missing_key_message">Add a GEMINI_API_KEY to enable AI composing</string>
 </resources>

@@ -27,8 +27,6 @@ android {
             useSupportLibrary = true
         }
 
-        val geminiApiKey: String = (project.findProperty("GEMINI_API_KEY") as String?) ?: ""
-        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     buildTypes {

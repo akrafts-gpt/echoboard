@@ -22,12 +22,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URL
-import org.json.JSONArray
-import org.json.JSONObject
 
 class HelloWorldKeyboardService : InputMethodService() {
     private var speechRecognizer: SpeechRecognizer? = null
@@ -202,47 +196,25 @@ class HelloWorldKeyboardService : InputMethodService() {
             Log.d(TAG, "Requesting bounded message for notes length=${userNotes.length}")
             updateBufferedText(getString(R.string.ai_generating_status), enableInsert = false)
 
-            val prompt = buildString {
-                append("Compose a coherent message that is at most 100 characters long. ")
-                append("Rewrite or summarize the user's running notes into that target length without adding markup.\n\n")
-                append("User notes:\n")
-                append(userNotes)
-            }
-
-            val result = when {
-                shouldUseOnDeviceModel() -> {
-                    Log.d(TAG, "Using on-device composer (no API key or preference)")
-                    composeOnDevice(userNotes)
-                }
-
-                else -> {
-                    val remoteResult = requestGeminiText(prompt)
-                    if (remoteResult is GeminiComposeResult.Failure && shouldFallbackToOnDevice(remoteResult)) {
-                        Log.w(TAG, "Remote compose failed (${remoteResult.reason}); falling back to on-device composer")
-                        composeOnDevice(userNotes)
-                    } else {
-                        remoteResult
-                    }
-                }
-            }
+            val result = composeOnDevice(userNotes)
 
             when (result) {
-                is GeminiComposeResult.Success -> {
+                is ComposeResult.Success -> {
                     val sanitized = sanitizeGeneratedText(result.text)
                     if (sanitized.isBlank()) {
-                        Log.e(TAG, "Sanitized AI text is blank; raw='${result.text}'")
+                        Log.e(TAG, "Sanitized on-device text is blank; raw='${result.text}'")
                         updateBufferedText(
                             getString(R.string.ai_error_message),
                             enableInsert = false
                         )
                     } else {
-                        Log.d(TAG, "AI composed text: '$sanitized'")
+                        Log.d(TAG, "On-device composed text: '$sanitized'")
                         updateBufferedText(sanitized)
                     }
                 }
 
-                is GeminiComposeResult.Failure -> {
-                    Log.e(TAG, "Gemini compose failed: ${result.reason}")
+                is ComposeResult.Failure -> {
+                    Log.e(TAG, "On-device compose failed: ${result.reason}")
                     val message = "${getString(R.string.ai_error_message)} (${result.reason})"
                     updateBufferedText(message, enableInsert = false)
                 }
@@ -250,140 +222,29 @@ class HelloWorldKeyboardService : InputMethodService() {
         }
     }
 
-    private fun shouldUseOnDeviceModel(): Boolean {
-        return BuildConfig.GEMINI_API_KEY.isBlank()
-    }
+    private suspend fun composeOnDevice(userNotes: String): ComposeResult {
+        return withContext(Dispatchers.Default) {
+            val condensed = userNotes
+                .replace("\n", " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
 
-    private fun shouldFallbackToOnDevice(result: GeminiComposeResult.Failure): Boolean {
-        val reason = result.reason.lowercase()
-        return "quota" in reason || "billing" in reason || "api key" in reason
-    }
-
-    private fun composeOnDevice(userNotes: String): GeminiComposeResult {
-        val condensed = userNotes
-            .replace("\n", " ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-
-        if (condensed.isBlank()) {
-            return GeminiComposeResult.Failure("No speech content to summarize")
-        }
-
-        val targetLength = 100
-        val bounded = if (condensed.length <= targetLength) {
-            val suffix = " (draft)"
-            val paddingNeeded = (targetLength - condensed.length - suffix.length).coerceAtLeast(0)
-            buildString {
-                append(condensed)
-                if (paddingNeeded > 0) {
-                    append(' ')
-                    append("·".repeat(paddingNeeded.coerceAtMost(10)))
-                }
-                append(suffix)
-            }.take(targetLength)
-        } else {
-            condensed.take(targetLength)
-        }
-
-        Log.d(TAG, "On-device composed text: '$bounded'")
-        return GeminiComposeResult.Success(bounded)
-    }
-
-    private suspend fun requestGeminiText(prompt: String): GeminiComposeResult {
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                Log.d(TAG, "Sending prompt to Gemini (${prompt.length} chars)")
-                val endpoint =
-                    "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-live:generateContent?key=${BuildConfig.GEMINI_API_KEY}"
-
-                val payload = JSONObject().apply {
-                    put(
-                        "contents",
-                        JSONArray().apply {
-                            put(
-                                JSONObject().apply {
-                                    put("role", "user")
-                                    put(
-                                        "parts",
-                                        JSONArray().apply {
-                                            put(
-                                                JSONObject().apply {
-                                                    put("text", prompt)
-                                                }
-                                            )
-                                        }
-                                    )
-                                }
-                            )
-                        }
-                    )
-                    put(
-                        "generationConfig",
-                        JSONObject().apply {
-                            put("maxOutputTokens", 120)
-                        }
-                    )
-                }
-
-                val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    doOutput = true
-                    connectTimeout = 10000
-                    readTimeout = 15000
-                }
-
-                connection.outputStream.use { outputStream ->
-                    OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
-                        writer.write(payload.toString())
-                        writer.flush()
-                    }
-                }
-
-                val responseText = if (connection.responseCode in 200..299) {
-                    connection.inputStream
-                } else {
-                    Log.w(TAG, "Gemini request failed with code ${connection.responseCode}")
-                    connection.errorStream ?: return@withContext GeminiComposeResult.Failure(
-                        "HTTP ${connection.responseCode} with empty body"
-                    )
-                }.bufferedReader(Charsets.UTF_8).use(BufferedReader::readText)
-
-                if (connection.responseCode !in 200..299) {
-                    val errorDetails = parseGeminiError(responseText)
-                    return@withContext GeminiComposeResult.Failure(
-                        "HTTP ${connection.responseCode}: $errorDetails"
-                    )
-                }
-
-                val json = JSONObject(responseText)
-                val candidates = json.optJSONArray("candidates") ?: return@withContext GeminiComposeResult.Failure(
-                    "No candidates in response"
-                )
-                val firstCandidate = candidates.optJSONObject(0) ?: return@withContext GeminiComposeResult.Failure(
-                    "Missing first candidate"
-                )
-                val content = firstCandidate.optJSONObject("content") ?: return@withContext GeminiComposeResult.Failure(
-                    "Missing content"
-                )
-                val parts = content.optJSONArray("parts") ?: return@withContext GeminiComposeResult.Failure(
-                    "Missing parts"
-                )
-                val firstPart = parts.optJSONObject(0) ?: return@withContext GeminiComposeResult.Failure(
-                    "Missing text part"
-                )
-                val text = firstPart.optString("text", null)
-
-                if (text.isNullOrBlank()) {
-                    return@withContext GeminiComposeResult.Failure("Empty text returned")
-                }
-
-                Log.d(TAG, "Gemini response parsed")
-                GeminiComposeResult.Success(text)
-            }.getOrElse { throwable ->
-                Log.e(TAG, "Gemini request threw an exception", throwable)
-                GeminiComposeResult.Failure(throwable.message ?: "Unexpected error")
+            if (condensed.isBlank()) {
+                return@withContext ComposeResult.Failure("No speech content to summarize")
             }
+
+            val targetLength = 100
+            val bounded = when {
+                condensed.length <= targetLength -> ensurePunctuation(condensed)
+                else -> {
+                    val head = condensed.take(72).trimEnd(',', ';', '-', ' ')
+                    val tail = condensed.takeLast(20).trimStart(',', ';', '-', ' ')
+                    "$head … $tail"
+                }
+            }
+
+            val trimmed = bounded.take(targetLength)
+            ComposeResult.Success(trimmed)
         }
     }
 
@@ -396,19 +257,6 @@ class HelloWorldKeyboardService : InputMethodService() {
             .trim()
 
         return condensed.take(100)
-    }
-
-    private fun parseGeminiError(response: String): String {
-        return runCatching {
-            val json = JSONObject(response)
-            val errorObj = json.optJSONObject("error")
-            val message = errorObj?.optString("message")
-            val status = errorObj?.optString("status")
-            listOfNotNull(status, message).joinToString(": ").ifBlank { response.take(200) }
-        }.getOrElse {
-            Log.w(TAG, "Failed to parse Gemini error body", it)
-            response.take(200)
-        }
     }
 
     private fun createSpeechRecognizerIfAvailable(): Boolean {
@@ -466,9 +314,18 @@ class HelloWorldKeyboardService : InputMethodService() {
             else -> "Unknown error"
         }
     }
+    private fun ensurePunctuation(text: String): String {
+        val trimmed = text.trim()
+        val lastChar = trimmed.lastOrNull()
+        return if (lastChar == null || lastChar in listOf('.', '!', '?')) {
+            trimmed
+        } else {
+            "$trimmed."
+        }
+    }
 }
 
-private sealed class GeminiComposeResult {
-    data class Success(val text: String) : GeminiComposeResult()
-    data class Failure(val reason: String) : GeminiComposeResult()
+private sealed class ComposeResult {
+    data class Success(val text: String) : ComposeResult()
+    data class Failure(val reason: String) : ComposeResult()
 }

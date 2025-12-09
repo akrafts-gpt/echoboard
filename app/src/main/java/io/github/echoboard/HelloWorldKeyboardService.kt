@@ -21,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class HelloWorldKeyboardService : InputMethodService() {
     private var speechRecognizer: SpeechRecognizer? = null
@@ -223,29 +222,7 @@ class HelloWorldKeyboardService : InputMethodService() {
     }
 
     private suspend fun composeOnDevice(userNotes: String): ComposeResult {
-        return withContext(Dispatchers.Default) {
-            val condensed = userNotes
-                .replace("\n", " ")
-                .replace(Regex("\\s+"), " ")
-                .trim()
-
-            if (condensed.isBlank()) {
-                return@withContext ComposeResult.Failure("No speech content to summarize")
-            }
-
-            val targetLength = 100
-            val bounded = when {
-                condensed.length <= targetLength -> ensurePunctuation(condensed)
-                else -> {
-                    val head = condensed.take(72).trimEnd(',', ';', '-', ' ')
-                    val tail = condensed.takeLast(20).trimStart(',', ';', '-', ' ')
-                    "$head … $tail"
-                }
-            }
-
-            val trimmed = bounded.take(targetLength)
-            ComposeResult.Success(trimmed)
-        }
+        return OnDeviceComposer(this).compose(userNotes)
     }
 
     private fun sanitizeGeneratedText(text: String): String {

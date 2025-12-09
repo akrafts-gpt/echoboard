@@ -1,0 +1,7 @@
+# Ignore Gradle build output
+/.gradle/
+/build/
+/app/build/
+
+# Do not track Gradle wrapper binary
+/gradle/wrapper/gradle-wrapper.jar

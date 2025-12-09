@@ -1,19 +1,13 @@
 package io.github.echoboard
 
-import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,7 +31,6 @@ class MainActivity : ComponentActivity() {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .windowInsetsPadding(WindowInsets.safeDrawing)
                             .padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
@@ -46,29 +39,15 @@ class MainActivity : ComponentActivity() {
                             style = MaterialTheme.typography.headlineMedium
                         )
                         Text(text = stringResource(id = R.string.sample_description))
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { openInputMethodSettings() }
-                        ) {
-                            Text(text = stringResource(id = R.string.sample_enable_button))
-                        }
                         TextField(
                             modifier = Modifier.fillMaxWidth(),
                             value = text,
                             onValueChange = { text = it },
                             label = { Text(text = stringResource(id = R.string.sample_field_label)) }
                         )
-                        Text(text = stringResource(id = R.string.sample_usage_hint))
                     }
                 }
             }
         }
-    }
-
-    private fun openInputMethodSettings() {
-        val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        startActivity(intent)
     }
 }

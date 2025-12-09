@@ -9,4 +9,11 @@
     <string name="sample_field_label">Input field</string>
     <string name="enable_keyboard_button_label">Open keyboard settings</string>
     <string name="enable_keyboard_steps">To enable Echoboard: 1) Tap "Open keyboard settings" to open system input settings. 2) Turn on Echoboard in the list. 3) Use the system input picker to switch to Echoboard.</string>
+    <string name="buffer_empty_hint">Speech results will appear here</string>
+    <string name="record_button_content_description">Start voice input</string>
+    <string name="insert_button_content_description">Insert buffered text</string>
+    <string name="listening_status">Listening…</string>
+    <string name="speech_unavailable_message">Speech recognition is unavailable</string>
+    <string name="no_speech_result_message">No speech recognized</string>
+    <string name="speech_error_message">There was a problem recognizing speech</string>
 </resources>

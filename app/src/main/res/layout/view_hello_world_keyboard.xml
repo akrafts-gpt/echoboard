@@ -6,13 +6,43 @@
     android:padding="24dp"
     android:background="@android:color/black">
 
-    <Button
-        android:id="@+id/buttonHelloWorld"
+    <TextView
+        android:id="@+id/textBufferedResult"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@android:color/white"
-        android:padding="24dp"
-        android:text="@string/hello_world_button_label"
-        android:textColor="@android:color/black"
-        android:textSize="18sp" />
+        android:layout_marginBottom="12dp"
+        android:textColor="@android:color/white"
+        android:textSize="18sp"
+        android:text="@string/buffer_empty_hint" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageButton
+            android:id="@+id/buttonRecord"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@android:color/white"
+            android:padding="24dp"
+            android:src="@android:drawable/ic_btn_speak_now"
+            android:contentDescription="@string/record_button_content_description" />
+
+        <Space
+            android:layout_width="12dp"
+            android:layout_height="0dp" />
+
+        <ImageButton
+            android:id="@+id/buttonInsert"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@android:color/white"
+            android:padding="24dp"
+            android:src="@android:drawable/arrow_up_float"
+            android:contentDescription="@string/insert_button_content_description" />
+    </LinearLayout>
 </LinearLayout>

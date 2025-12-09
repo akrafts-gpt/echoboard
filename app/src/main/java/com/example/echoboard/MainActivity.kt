@@ -1,7 +1,8 @@
-package com.example.helloworld
+package com.example.echoboard
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import com.example.echoboard.R
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxSize()
                             .windowInsetsPadding(WindowInsets.safeDrawing)
+                            .imePadding()
                             .padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
@@ -52,6 +54,12 @@ class MainActivity : ComponentActivity() {
                         ) {
                             Text(text = stringResource(id = R.string.sample_enable_button))
                         }
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { openSystemSettings() }
+                        ) {
+                            Text(text = stringResource(id = R.string.sample_system_settings_button))
+                        }
                         TextField(
                             modifier = Modifier.fillMaxWidth(),
                             value = text,
@@ -59,6 +67,7 @@ class MainActivity : ComponentActivity() {
                             label = { Text(text = stringResource(id = R.string.sample_field_label)) }
                         )
                         Text(text = stringResource(id = R.string.sample_usage_hint))
+                        Text(text = stringResource(id = R.string.sample_enable_instructions))
                     }
                 }
             }
@@ -67,6 +76,13 @@ class MainActivity : ComponentActivity() {
 
     private fun openInputMethodSettings() {
         val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
+    }
+
+    private fun openSystemSettings() {
+        val intent = Intent(Settings.ACTION_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(intent)

@@ -14,7 +14,12 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.google.ai.client.generativeai.GenerativeModel
+import java.io.BufferedReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,12 +35,6 @@ class HelloWorldKeyboardService : InputMethodService() {
     private var composeJob: Job? = null
     private val userPromptLog = StringBuilder()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val generativeModel: GenerativeModel by lazy {
-        GenerativeModel(
-            modelName = "gemini-1.5-flash",
-            apiKey = BuildConfig.GEMINI_API_KEY
-        )
-    }
 
     private val recognitionIntent: Intent by lazy {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -192,10 +191,7 @@ class HelloWorldKeyboardService : InputMethodService() {
                 append(userNotes)
             }
 
-            val generated = withContext(Dispatchers.IO) {
-                runCatching { generativeModel.generateContent(prompt).text }.getOrNull()
-            }
-
+            val generated = requestGeminiText(prompt)
             val sanitized = generated?.let { sanitizeGeneratedText(it) }
 
             if (sanitized.isNullOrBlank()) {
@@ -203,6 +199,74 @@ class HelloWorldKeyboardService : InputMethodService() {
             } else {
                 updateBufferedText(sanitized)
             }
+        }
+    }
+
+    private suspend fun requestGeminiText(prompt: String): String? {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val endpoint =
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${BuildConfig.GEMINI_API_KEY}"
+
+                val payload = JSONObject().apply {
+                    put(
+                        "contents",
+                        JSONArray().apply {
+                            put(
+                                JSONObject().apply {
+                                    put(
+                                        "parts",
+                                        JSONArray().apply {
+                                            put(
+                                                JSONObject().apply {
+                                                    put("text", prompt)
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                    put(
+                        "generationConfig",
+                        JSONObject().apply {
+                            put("maxOutputTokens", 120)
+                        }
+                    )
+                }
+
+                val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    doOutput = true
+                    connectTimeout = 10000
+                    readTimeout = 15000
+                }
+
+                connection.outputStream.use { outputStream ->
+                    OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
+                        writer.write(payload.toString())
+                        writer.flush()
+                    }
+                }
+
+                val responseText = if (connection.responseCode in 200..299) {
+                    connection.inputStream
+                } else {
+                    connection.errorStream ?: return@withContext null
+                }.bufferedReader(Charsets.UTF_8).use(BufferedReader::readText)
+
+                if (connection.responseCode !in 200..299) return@withContext null
+
+                val json = JSONObject(responseText)
+                val candidates = json.optJSONArray("candidates") ?: return@withContext null
+                val firstCandidate = candidates.optJSONObject(0) ?: return@withContext null
+                val content = firstCandidate.optJSONObject("content") ?: return@withContext null
+                val parts = content.optJSONArray("parts") ?: return@withContext null
+                val firstPart = parts.optJSONObject(0) ?: return@withContext null
+                firstPart.optString("text", null)
+            }.getOrNull()
         }
     }
 
